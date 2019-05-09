@@ -28,42 +28,6 @@ POLICY
   }
 }
 
-# cf. https://www.terraform.io/docs/providers/aws/r/lambda_function.html
-resource "aws_lambda_function" "service" {
-  filename         = "${var.lambda_file}"
-  source_code_hash = "${var.source_code_hash}"
-  function_name    = "${var.appname}service"
-  role             = "${aws_iam_role.lambda_service_role.arn}"
-  handler          = "${var.lambda_handler}"
-  runtime          = "${var.lambda_runtime}"
-  memory_size      = "${var.lambda_memory_size}"
-  publish          = true
-  timeout          = 11
-
-  # Environment vars are specific to each version of the lambda function and can't be changed after deployment.
-  # So each change of the vars requires a redeployment of the lambda function to have an effect.
-  # cf. https://docs.aws.amazon.com/lambda/latest/dg/env_variables.html
-  environment {
-    variables = "${var.lambda_environment_vars}"
-  }
-
-  # cf. https://docs.aws.amazon.com/lambda/latest/dg/enabling-x-ray.html
-  tracing_config {
-    mode = "Active"
-  }
-
-  tags {
-    Name       = "${var.appname}service-lambda-fn"
-    Created_By = "Terraform - do not modify in AWS Management Console"
-  }
-}
-
-# cf. https://www.terraform.io/docs/providers/aws/r/lambda_function.html#cloudwatch-logging-and-permissions
-resource "aws_cloudwatch_log_group" "lambda" {
-  name              = "/aws/lambda/${aws_lambda_function.service.function_name}"
-  retention_in_days = 14
-}
-
 # https://www.terraform.io/docs/providers/aws/r/iam_role.html
 resource "aws_iam_role" "lambda_service_role" {
   name = "${var.appname}service-lambda-role"
@@ -115,39 +79,139 @@ resource "aws_api_gateway_rest_api" "service" {
   }
 }
 
+/*
+Root Resource 
+*/
+# cf. https://www.terraform.io/docs/providers/aws/r/lambda_function.html
+resource "aws_lambda_function" "rootlambda" {
+  filename         = "${var.lambda_root_file}"
+  source_code_hash = "${base64sha256(file("${var.root_lambda_file}"))}"
+  function_name    = "${var.appname}rootlambdaservice"
+  role             = "${aws_iam_role.lambda_service_role.arn}"
+  handler          = "${var.lambda_handler}"
+  runtime          = "${var.lambda_runtime}"
+  memory_size      = "${var.lambda_memory_size}"
+  publish          = true
+  timeout          = 11
+
+  # Environment vars are specific to each version of the lambda function and can't be changed after deployment.
+  # So each change of the vars requires a redeployment of the lambda function to have an effect.
+  # cf. https://docs.aws.amazon.com/lambda/latest/dg/env_variables.html
+  environment {
+    variables = "${var.lambda_environment_vars}"
+  }
+
+  # cf. https://docs.aws.amazon.com/lambda/latest/dg/enabling-x-ray.html
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags {
+    Name       = "${var.appname}rootlambda-lambda-fn"
+    Created_By = "Terraform - do not modify in AWS Management Console"
+  }
+}
+
+
 # cf. https://www.terraform.io/docs/providers/aws/r/api_gateway_resource.html
-resource "aws_api_gateway_resource" "proxyresource" {
+resource "aws_api_gateway_resource" "rootresource" {
   rest_api_id = "${aws_api_gateway_rest_api.service.id}"
   parent_id   = "${aws_api_gateway_rest_api.service.root_resource_id}"
-  path_part   = "{proxy+}"
+  path_part   = "/"
 }
 
 # cf. https://www.terraform.io/docs/providers/aws/r/api_gateway_method.html
-resource "aws_api_gateway_method" "proxyresource_method" {
+resource "aws_api_gateway_method" "rootresource_method" {
   rest_api_id   = "${aws_api_gateway_rest_api.service.id}"
-  resource_id   = "${aws_api_gateway_resource.proxyresource.id}"
-  http_method   = "ANY"
+  resource_id   = "${aws_api_gateway_resource.rootresource.id}"
+  http_method   = "GET"
   authorization = "NONE"
 }
 
-# cf. https://www.terraform.io/docs/providers/aws/r/api_gateway_integration.html
-resource "aws_api_gateway_integration" "proxyresource_method_integration" {
-  rest_api_id             = "${aws_api_gateway_rest_api.service.id}"
-  resource_id             = "${aws_api_gateway_resource.proxyresource.id}"
-  http_method             = "${aws_api_gateway_method.proxyresource_method.http_method}"
-  integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.service.arn}:$${stageVariables.lambda_alias_name}/invocations"
+/*
+Featuresdescription Resource
+*/
+# cf. https://www.terraform.io/docs/providers/aws/r/lambda_function.html
+resource "aws_lambda_function" "featureslambda" {
+  filename         = "${var.lambda_featuresdescription_file}"
+  source_code_hash = "${base64sha256(file("${var.lambda_featuresdescription_file}"))}"
+  function_name    = "${var.appname}featuresdescriptionservice"
+  role             = "${aws_iam_role.lambda_service_role.arn}"
+  handler          = "${var.lambda_handler}"
+  runtime          = "${var.lambda_runtime}"
+  memory_size      = "${var.lambda_memory_size}"
+  publish          = true
+  timeout          = 11
+
+  # Environment vars are specific to each version of the lambda function and can't be changed after deployment.
+  # So each change of the vars requires a redeployment of the lambda function to have an effect.
+  # cf. https://docs.aws.amazon.com/lambda/latest/dg/env_variables.html
+  environment {
+    variables = "${var.lambda_environment_vars}"
+  }
+
+  # cf. https://docs.aws.amazon.com/lambda/latest/dg/enabling-x-ray.html
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags {
+    Name       = "${var.appname}rootlambda-lambda-fn"
+    Created_By = "Terraform - do not modify in AWS Management Console"
+  }
 }
 
+resource "aws_api_gateway_resource" "featuresresource" {
+  rest_api_id = "${aws_api_gateway_rest_api.service.id}"
+  parent_id = "${aws_api_gateway_resource.proxyresourceroot}"
+  path_part = "/featuresdescription"
+}
+
+resource "aws_api_gateway_method" "featuresdescription_method" {
+  rest_api_id = "${aws_api_gateway_rest_api.service.id}"
+  resource_id = "${aws_api_gateway_resource.featuresresource.id}"
+  http_method = "GET"
+  authorization = "NONE"
+}
+
+
+# cf. https://www.terraform.io/docs/providers/aws/r/api_gateway_integration.html
+resource "aws_api_gateway_integration" "rootresource_method_integration" {
+  rest_api_id             = "${aws_api_gateway_rest_api.service.id}"
+  resource_id             = "${aws_api_gateway_resource.rootresource.id}"
+  http_method             = "${aws_api_gateway_method.rootresource_method.http_method}"
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.rootlambda.arn}:$${stageVariables.lambda_alias_name}/invocations"
+}
+
+resource "aws_api_gateway_integration" "featuresresource_method_integration" {
+  rest_api_id             = "${aws_api_gateway_rest_api.service.id}"
+  resource_id             = "${aws_api_gateway_resource.featuresresource.id}"
+  http_method             = "${aws_api_gateway_method.featuresdescription_method.http_method}"
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${var.aws_region}:lambda:path/2015-03-31/functions/${aws_lambda_function.featureslambda.arn}:$${stageVariables.lambda_alias_name}/invocations"
+}
+
+
 # cf. https://www.terraform.io/docs/providers/aws/r/lambda_permission.html
-resource "aws_lambda_permission" "allow_apigateway_for_lambda" {
+resource "aws_lambda_permission" "allow_apigateway_for_rootlambda" {
   statement_id  = "AllowAPIGatewayToExecuteLambdaFunction"
   action        = "lambda:InvokeFunction"
-  function_name = "${aws_lambda_function.service.function_name}"
+  function_name = "${aws_lambda_function.rootlambda.function_name}"
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.service.execution_arn}/*/*/*"
 }
+
+resource "aws_lambda_permission" "allow_apigateway_for_featureslambda" {
+  statement_id  = "AllowAPIGatewayToExecuteLambdaFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.featureslambda.function_name}"
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.service.execution_arn}/*/*/*"
+}
+
 
 # ${replace(aws_route53_zone.hosted_zone.name, "/[.]$/", "")}
 # cf. https://www.terraform.io/docs/providers/aws/r/lambda_alias.html
@@ -181,8 +245,19 @@ resource "aws_lambda_permission" "allow_apigateway_for_alias" {
   count         = "${length(aws_lambda_alias.alias.*.name)}"
   statement_id  = "AllowAPIGatewayToExecute${element(aws_lambda_alias.alias.*.name, count.index)}LambdaFunction"
   action        = "lambda:InvokeFunction"
-  function_name = "${aws_lambda_function.service.function_name}"
+  function_name = "${aws_lambda_function.rootlambda.function_name}"
   qualifier     = "${element(aws_lambda_alias.alias.*.name, count.index)}"
   principal     = "apigateway.amazonaws.com"
   source_arn    = "${aws_api_gateway_rest_api.service.execution_arn}/*/*/*"
 }
+
+resource "aws_lambda_permission" "allow_apigateway_for_alias" {
+  count         = "${length(aws_lambda_alias.alias.*.name)}"
+  statement_id  = "AllowAPIGatewayToExecute${element(aws_lambda_alias.alias.*.name, count.index)}LambdaFunction"
+  action        = "lambda:InvokeFunction"
+  function_name = "${aws_lambda_function.featureslambda.function_name}"
+  qualifier     = "${element(aws_lambda_alias.alias.*.name, count.index)}"
+  principal     = "apigateway.amazonaws.com"
+  source_arn    = "${aws_api_gateway_rest_api.service.execution_arn}/*/*/*"
+}
+

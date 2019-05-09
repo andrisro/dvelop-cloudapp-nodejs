@@ -38,7 +38,7 @@ variable "lambda_handler" {
 }
 
 variable "lambda_runtime" {
-  description = "lambda runtime e.g. go1.x"
+  description = "lambda runtime e.g. nodejs8.10"
 }
 
 variable "lambda_memory_size" {
